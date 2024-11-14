@@ -12,7 +12,8 @@ import SwiftData
 struct InstantCustomEmailApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Destination.self,
+            Alias.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,7 +26,7 @@ struct InstantCustomEmailApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AliasListView()
         }
         .modelContainer(sharedModelContainer)
     }

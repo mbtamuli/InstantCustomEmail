@@ -4,58 +4,69 @@
 //
 //  Created by Mriyam Tamuli on 14/11/24.
 //
-
 import SwiftUI
 import SwiftData
 
-struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+struct AliasListView: View {
+    @Query(sort: \Alias.customAddress) private var aliases: [Alias]
+    @Environment(\.modelContext) private var context
+    @State private var showingAddAliasView = false
 
     var body: some View {
-        NavigationSplitView {
+        NavigationView {
             List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                // Group aliases by the domain of the custom address
+                ForEach(groupedAliases.keys.sorted(), id: \.self) { domain in
+                    Section(header: Text(domain)) {
+                        ForEach(groupedAliases[domain] ?? []) { alias in
+                            VStack(alignment: .leading) {
+                                Text(alias.customAddress).font(.headline)
+                                Text("→ \(alias.destination.email)").font(.subheadline)
+                            }
+                        }
+                        .onDelete { indexSet in
+                            deleteAliases(at: indexSet, in: domain)
+                        }
                     }
                 }
-                .onDelete(perform: deleteItems)
             }
+            .navigationTitle("Email Aliases")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                    Button("Add Alias") {
+                        showingAddAliasView = true
                     }
                 }
             }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            .sheet(isPresented: $showingAddAliasView) {
+                AddAliasView()
             }
+        }
+    }
+
+    // Helper to group aliases by domain
+    private var groupedAliases: [String: [Alias]] {
+        Dictionary(grouping: aliases) { alias in
+            extractDomain(from: alias.customAddress)
+        }
+    }
+
+    // Helper to extract domain from an email address
+    private func extractDomain(from email: String) -> String {
+        let components = email.split(separator: "@")
+        return components.count > 1 ? String(components[1]) : email
+    }
+
+    // Delete aliases in a specific domain
+    private func deleteAliases(at offsets: IndexSet, in domain: String) {
+        if let aliasesInDomain = groupedAliases[domain] {
+            offsets.map { aliasesInDomain[$0] }.forEach(context.delete)
+            try? context.save()
         }
     }
 }
 
 #Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+    AliasListView()
+        .modelContainer(sampleModelContainer())
 }
