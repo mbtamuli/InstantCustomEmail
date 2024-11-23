@@ -8,6 +8,9 @@ enum CloudflareAPI {
     case createEmailRoute(accountId: String, customAddress: String, destinationAddress: String)
     case deleteEmailRoute(accountId: String, destinationAddressIdentifier: String)
     case getEmailRoute(accountId: String, destinationAddressIdentifier: String)
+    case getEmailAliases(accountId: String)
+    case createEmailAlias(accountId: String, customAddress: String, destinationAddress: String)
+    case deleteEmailAlias(accountId: String, destinationAddressIdentifier: String)
 }
 
 extension CloudflareAPI: TargetType {
@@ -25,25 +28,37 @@ extension CloudflareAPI: TargetType {
             return "/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
         case .getEmailRoute(let accountId, let destinationAddressIdentifier):
             return "/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
+        case .getEmailAliases(let accountId):
+            return "/\(accountId)/email/routing/aliases"
+        case .createEmailAlias(let accountId, _, _):
+            return "/\(accountId)/email/routing/aliases"
+        case .deleteEmailAlias(let accountId, let destinationAddressIdentifier):
+            return "/\(accountId)/email/routing/aliases/\(destinationAddressIdentifier)"
         }
     }
 
     var method: Moya.Method {
         switch self {
-        case .getEmailRoutes, .getEmailRoute:
+        case .getEmailRoutes, .getEmailRoute, .getEmailAliases:
             return .get
-        case .createEmailRoute:
+        case .createEmailRoute, .createEmailAlias:
             return .post
-        case .deleteEmailRoute:
+        case .deleteEmailRoute, .deleteEmailAlias:
             return .delete
         }
     }
 
     var task: Task {
         switch self {
-        case .getEmailRoutes, .getEmailRoute, .deleteEmailRoute:
+        case .getEmailRoutes, .getEmailRoute, .deleteEmailRoute, .getEmailAliases, .deleteEmailAlias:
             return .requestPlain
         case .createEmailRoute(_, let customAddress, let destinationAddress):
+            let parameters: [String: Any] = [
+                "custom_address": customAddress,
+                "destination_address": destinationAddress
+            ]
+            return .requestParameters(parameters: parameters, encoding: JSONEncoding.default)
+        case .createEmailAlias(_, let customAddress, let destinationAddress):
             let parameters: [String: Any] = [
                 "custom_address": customAddress,
                 "destination_address": destinationAddress
@@ -120,6 +135,49 @@ class CloudflareService {
                 } catch let error {
                     completion(.failure(error))
                 }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func getEmailAliases(completion: @escaping (Result<[EmailAlias], Error>) -> Void) {
+        provider.request(.getEmailAliases(accountId: accountId)) { result in
+            switch result {
+            case .success(let response):
+                do {
+                    let emailAliases = try JSONDecoder().decode([EmailAlias].self, from: response.data)
+                    completion(.success(emailAliases))
+                } catch let error {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func createEmailAlias(customAddress: String, destinationAddress: String, completion: @escaping (Result<EmailAlias, Error>) -> Void) {
+        provider.request(.createEmailAlias(accountId: accountId, customAddress: customAddress, destinationAddress: destinationAddress)) { result in
+            switch result {
+            case .success(let response):
+                do {
+                    let emailAlias = try JSONDecoder().decode(EmailAlias.self, from: response.data)
+                    completion(.success(emailAlias))
+                } catch let error {
+                    completion(.failure(error))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func deleteEmailAlias(destinationAddressIdentifier: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        provider.request(.deleteEmailAlias(accountId: accountId, destinationAddressIdentifier: destinationAddressIdentifier)) { result in
+            switch result {
+            case .success:
+                completion(.success(()))
             case .failure(let error):
                 completion(.failure(error))
             }

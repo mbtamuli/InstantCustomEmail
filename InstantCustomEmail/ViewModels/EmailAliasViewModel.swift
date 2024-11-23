@@ -6,7 +6,8 @@ class EmailAliasViewModel: ObservableObject {
     private let cloudflareService = CloudflareService()
 
     func fetchEmailAliases() {
-        cloudflareService.getEmailRoutes { result in
+        // Assuming there is a separate endpoint or method to fetch email aliases
+        cloudflareService.getEmailAliases { result in
             switch result {
             case .success(let aliases):
                 DispatchQueue.main.async {
@@ -19,7 +20,7 @@ class EmailAliasViewModel: ObservableObject {
     }
 
     func addEmailAlias(alias: String, destination: String) {
-        cloudflareService.createEmailRoute(customAddress: alias, destinationAddress: destination) { result in
+        cloudflareService.createEmailAlias(customAddress: alias, destinationAddress: destination) { result in
             switch result {
             case .success(let alias):
                 DispatchQueue.main.async {
@@ -32,7 +33,7 @@ class EmailAliasViewModel: ObservableObject {
     }
 
     func deleteEmailAlias(aliasIdentifier: String) {
-        cloudflareService.deleteEmailRoute(destinationAddressIdentifier: aliasIdentifier) { result in
+        cloudflareService.deleteEmailAlias(destinationAddressIdentifier: aliasIdentifier) { result in
             switch result {
             case .success:
                 DispatchQueue.main.async {
