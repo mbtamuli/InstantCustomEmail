@@ -1,14 +1,25 @@
 import Foundation
+import Combine
 import Moya
 
+// MARK: - CloudflareAPI TargetType Enum
+
 enum CloudflareAPI {
-    case getEmailRoutes(accountId: String)
-    case createEmailRoute(accountId: String, customAddress: String, destinationAddress: String)
-    case deleteEmailRoute(accountId: String, destinationAddressIdentifier: String)
-    case getEmailRoute(accountId: String, destinationAddressIdentifier: String)
-    case getEmailAliases(accountId: String)
-    case createEmailAlias(accountId: String, customAddress: String, destinationAddress: String)
-    case deleteEmailAlias(accountId: String, destinationAddressIdentifier: String)
+    // Destination Addresses
+    case listDestinationAddresses(accountId: String)
+    case createDestinationAddress(accountId: String, email: String)
+    case deleteDestinationAddress(accountId: String, destinationAddressIdentifier: String)
+    case getDestinationAddress(accountId: String, destinationAddressIdentifier: String)
+
+    // Routing Rules
+    case listRoutingRules(zoneId: String)
+    case createRoutingRule(zoneId: String, rule: RoutingRule)
+    case deleteRoutingRule(zoneId: String, ruleId: String)
+    case getRoutingRule(zoneId: String, ruleId: String)
+    case getCatchAllRule(zoneId: String)
+    case updateCatchAllRule(zoneId: String, rule: RoutingRule)
+
+    // Token Verification
     case verifyToken
 }
 
@@ -19,20 +30,31 @@ extension CloudflareAPI: TargetType {
 
     var path: String {
         switch self {
-        case .getEmailRoutes(let accountId):
+        // Destination Addresses
+        case .listDestinationAddresses(let accountId):
             return "/accounts/\(accountId)/email/routing/addresses"
-        case .createEmailRoute(let accountId, _, _):
+        case .createDestinationAddress(let accountId, _):
             return "/accounts/\(accountId)/email/routing/addresses"
-        case .deleteEmailRoute(let accountId, let destinationAddressIdentifier):
+        case .deleteDestinationAddress(let accountId, let destinationAddressIdentifier):
             return "/accounts/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
-        case .getEmailRoute(let accountId, let destinationAddressIdentifier):
+        case .getDestinationAddress(let accountId, let destinationAddressIdentifier):
             return "/accounts/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
-        case .getEmailAliases(let accountId):
-            return "/accounts/\(accountId)/email/routing/aliases"
-        case .createEmailAlias(let accountId, _, _):
-            return "/accounts/\(accountId)/email/routing/aliases"
-        case .deleteEmailAlias(let accountId, let destinationAddressIdentifier):
-            return "/accounts/\(accountId)/email/routing/aliases/\(destinationAddressIdentifier)"
+
+        // Routing Rules
+        case .listRoutingRules(let zoneId):
+            return "/zones/\(zoneId)/email/routing/rules"
+        case .createRoutingRule(let zoneId, _):
+            return "/zones/\(zoneId)/email/routing/rules"
+        case .deleteRoutingRule(let zoneId, let ruleId):
+            return "/zones/\(zoneId)/email/routing/rules/\(ruleId)"
+        case .getRoutingRule(let zoneId, let ruleId):
+            return "/zones/\(zoneId)/email/routing/rules/\(ruleId)"
+        case .getCatchAllRule(let zoneId):
+            return "/zones/\(zoneId)/email/routing/rules/catch_all"
+        case .updateCatchAllRule(let zoneId, _):
+            return "/zones/\(zoneId)/email/routing/rules/catch_all"
+
+        // Token Verification
         case .verifyToken:
             return "/user/tokens/verify"
         }
@@ -40,59 +62,88 @@ extension CloudflareAPI: TargetType {
 
     var method: Moya.Method {
         switch self {
-        case .getEmailRoutes, .getEmailRoute, .getEmailAliases, .verifyToken:
+        case .listDestinationAddresses, .getDestinationAddress, .listRoutingRules, .getRoutingRule, .getCatchAllRule, .verifyToken:
             return .get
-        case .createEmailRoute, .createEmailAlias:
+        case .createDestinationAddress, .createRoutingRule:
             return .post
-        case .deleteEmailRoute, .deleteEmailAlias:
+        case .deleteDestinationAddress, .deleteRoutingRule:
             return .delete
+        case .updateCatchAllRule:
+            return .put
         }
     }
 
     var task: Task {
         switch self {
-        case .getEmailRoutes, .getEmailRoute, .deleteEmailRoute, .getEmailAliases, .deleteEmailAlias, .verifyToken:
+        case .listDestinationAddresses, .getDestinationAddress, .listRoutingRules, .getRoutingRule, .getCatchAllRule, .verifyToken:
             return .requestPlain
-        case .createEmailRoute(_, let customAddress, let destinationAddress):
-            let parameters: [String: Any] = [
-                "custom_address": customAddress,
-                "destination_address": destinationAddress
-            ]
-            return .requestParameters(parameters: parameters, encoding: JSONEncoding.default)
-        case .createEmailAlias(_, let customAddress, let destinationAddress):
-            let parameters: [String: Any] = [
-                "custom_address": customAddress,
-                "destination_address": destinationAddress
-            ]
-            return .requestParameters(parameters: parameters, encoding: JSONEncoding.default)
+        case .createDestinationAddress(_, let email):
+            return .requestParameters(parameters: ["email": email], encoding: JSONEncoding.default)
+        case .createRoutingRule(_, let rule), .updateCatchAllRule(_, let rule):
+            return .requestJSONEncodable(rule)
+        case .deleteDestinationAddress, .deleteRoutingRule:
+            return .requestPlain
         }
     }
 
     var headers: [String: String]? {
         var headers = ["Content-Type": "application/json"]
-        guard let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") else {
-            assertionFailure("API Token not found in Keychain. Requests may fail.")
-            return headers  // Return basic headers without Authorization
+        if let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") {
+            headers["Authorization"] = "Bearer \(apiToken)"
         }
-        headers["Authorization"] = "Bearer \(apiToken)"
         return headers
     }
 }
 
+// MARK: - CloudflareService
+
 class CloudflareService {
     private let provider = MoyaProvider<CloudflareAPI>(plugins: [NetworkLoggerPlugin(configuration: .init(logOptions: .verbose))])
+
     private var accountId: String {
-        UserDefaults.standard.string(forKey: Constants.cloudflareAccountIdKey) ?? ""
+        guard let accountId = UserDefaults.standard.string(forKey: Constants.cloudflareAccountIdKey), !accountId.isEmpty else {
+            fatalError("Account ID is not set")
+        }
+        return accountId
     }
 
-    func getEmailRoutes(completion: @escaping (Result<[EmailRoute], Error>) -> Void) {
-        provider.request(.getEmailRoutes(accountId: accountId)) { result in
+    private var zoneId: String {
+        guard let zoneId = UserDefaults.standard.string(forKey: "CloudflareZoneIdKey"), !zoneId.isEmpty else {
+            // You could show an alert or navigate to settings
+            fatalError("Zone ID is not set")  // Or handle the case more gracefully
+        }
+        return zoneId
+    }
+
+    // MARK: Email Routes
+
+    func listDestinationAddresses(completion: @escaping (Result<[DestinationAddress], Error>) -> Void) {
+        print("Account ID: \(accountId)")  // For debugging purposes
+        provider.request(.listDestinationAddresses(accountId: accountId)) { result in
+            self.handleResponse(result, completion: completion)
+        }
+    }
+
+    func createDestinationAddress(email: String, completion: @escaping (Result<DestinationAddress, Error>) -> Void) {
+        provider.request(.createDestinationAddress(accountId: accountId, email: email)) { result in
+            self.handleResponse(result, completion: completion)
+        }
+    }
+
+    func deleteDestinationAddress(identifier: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        provider.request(.deleteDestinationAddress(accountId: accountId, destinationAddressIdentifier: identifier)) { result in
             switch result {
             case .success(let response):
                 do {
-                    let emailRoutes = try JSONDecoder().decode([EmailRoute].self, from: response.data)
-                    completion(.success(emailRoutes))
-                } catch let error {
+                    // Decode response with EmptyResponse
+                    let apiResponse = try JSONDecoder().decode(APIResponse<EmptyResponse>.self, from: response.data)
+                    if apiResponse.success {
+                        completion(.success(()))
+                    } else {
+                        let error = NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "API returned errors: \(apiResponse.errors)"])
+                        completion(.failure(error))
+                    }
+                } catch {
                     completion(.failure(error))
                 }
             case .failure(let error):
@@ -101,15 +152,27 @@ class CloudflareService {
         }
     }
 
-    func createEmailRoute(customAddress: String, destinationAddress: String, completion: @escaping (Result<EmailRoute, Error>) -> Void) {
-        print(accountId, customAddress, destinationAddress)
-        provider.request(.createEmailRoute(accountId: accountId, customAddress: customAddress, destinationAddress: destinationAddress)) { result in
+    func getDestinationAddress(identifier: String, completion: @escaping (Result<DestinationAddress, Error>) -> Void) {
+        provider.request(.getDestinationAddress(accountId: accountId, destinationAddressIdentifier: identifier)) { result in
+            self.handleResponse(result, completion: completion)
+        }
+    }
+
+    // MARK: Routing Rules
+
+    func listRoutingRules(completion: @escaping (Result<[RoutingRule], Error>) -> Void) {
+        provider.request(.listRoutingRules(zoneId: zoneId)) { result in
             switch result {
             case .success(let response):
                 do {
-                    let emailRoute = try JSONDecoder().decode(EmailRoute.self, from: response.data)
-                    completion(.success(emailRoute))
-                } catch let error {
+                    let apiResponse = try JSONDecoder().decode(RoutingRulesResponse.self, from: response.data)
+                    if apiResponse.success {
+                        completion(.success(apiResponse.result))
+                    } else {
+                        let error = NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "API returned errors: \(apiResponse.errors)"])
+                        completion(.failure(error))
+                    }
+                } catch {
                     completion(.failure(error))
                 }
             case .failure(let error):
@@ -118,25 +181,27 @@ class CloudflareService {
         }
     }
 
-    func deleteEmailRoute(destinationAddressIdentifier: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        provider.request(.deleteEmailRoute(accountId: accountId, destinationAddressIdentifier: destinationAddressIdentifier)) { result in
-            switch result {
-            case .success:
-                completion(.success(()))
-            case .failure(let error):
-                completion(.failure(error))
-            }
+
+    func createRoutingRule(rule: RoutingRule, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        provider.request(.createRoutingRule(zoneId: zoneId, rule: rule)) { result in
+            self.handleResponse(result, completion: completion)
         }
     }
 
-    func getEmailRoute(destinationAddressIdentifier: String, completion: @escaping (Result<EmailRoute, Error>) -> Void) {
-        provider.request(.getEmailRoute(accountId: accountId, destinationAddressIdentifier: destinationAddressIdentifier)) { result in
+    func deleteRoutingRule(ruleId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        provider.request(.deleteRoutingRule(zoneId: zoneId, ruleId: ruleId)) { result in
             switch result {
             case .success(let response):
                 do {
-                    let emailRoute = try JSONDecoder().decode(EmailRoute.self, from: response.data)
-                    completion(.success(emailRoute))
-                } catch let error {
+                    // Decode response with EmptyResponse
+                    let apiResponse = try JSONDecoder().decode(APIResponse<EmptyResponse>.self, from: response.data)
+                    if apiResponse.success {
+                        completion(.success(()))
+                    } else {
+                        let error = NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "API returned errors: \(apiResponse.errors)"])
+                        completion(.failure(error))
+                    }
+                } catch {
                     completion(.failure(error))
                 }
             case .failure(let error):
@@ -145,75 +210,107 @@ class CloudflareService {
         }
     }
 
-    func getEmailAliases(completion: @escaping (Result<[EmailAlias], Error>) -> Void) {
-        provider.request(.getEmailAliases(accountId: accountId)) { result in
-            switch result {
-            case .success(let response):
-                do {
-                    let emailAliases = try JSONDecoder().decode([EmailAlias].self, from: response.data)
-                    completion(.success(emailAliases))
-                } catch let error {
-                    completion(.failure(error))
-                }
-            case .failure(let error):
-                completion(.failure(error))
-            }
+    func getRoutingRule(ruleId: String, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        provider.request(.getRoutingRule(zoneId: zoneId, ruleId: ruleId)) { result in
+            self.handleResponse(result, completion: completion)
         }
     }
 
-    func createEmailAlias(customAddress: String, destinationAddress: String, completion: @escaping (Result<EmailAlias, Error>) -> Void) {
-        provider.request(.createEmailAlias(accountId: accountId, customAddress: customAddress, destinationAddress: destinationAddress)) { result in
-            switch result {
-            case .success(let response):
-                do {
-                    let emailAlias = try JSONDecoder().decode(EmailAlias.self, from: response.data)
-                    completion(.success(emailAlias))
-                } catch let error {
-                    completion(.failure(error))
-                }
-            case .failure(let error):
-                completion(.failure(error))
-            }
+    func getCatchAllRule(completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        provider.request(.getCatchAllRule(zoneId: zoneId)) { result in
+            self.handleResponse(result, completion: completion)
         }
     }
 
-    func deleteEmailAlias(destinationAddressIdentifier: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        provider.request(.deleteEmailAlias(accountId: accountId, destinationAddressIdentifier: destinationAddressIdentifier)) { result in
-            switch result {
-            case .success:
-                completion(.success(()))
-            case .failure(let error):
-                completion(.failure(error))
-            }
+    func updateCatchAllRule(rule: RoutingRule, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        provider.request(.updateCatchAllRule(zoneId: zoneId, rule: rule)) { result in
+            self.handleResponse(result, completion: completion)
         }
     }
+
+
+    // MARK: Token Verification
 
     func verifyToken(completion: @escaping (Result<String, Error>) -> Void) {
-        // Log the token before making the request
-        if let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") {
-            print("Retrieved API Token: \(apiToken)")
-        } else {
-            print("API Token not found in Keychain")
-        }
-
         provider.request(.verifyToken) { result in
-            switch result {
-            case .success(let response):
-                do {
-                    let json = try JSONSerialization.jsonObject(with: response.data, options: []) as? [String: Any]
-                    if let success = json?["success"] as? Bool, success {
-                        completion(.success("This API Token is valid and active"))
-                    } else {
-                        let errors = json?["errors"] as? [[String: Any]]
-                        let errorMessage = errors?.first?["message"] as? String ?? "Unknown error"
-                        completion(.failure(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
-                    }
-                } catch let error {
-                    completion(.failure(error))
-                }
-            case .failure(let error):
-                completion(.failure(error))
+            self.handleResponse(result, completion: completion)
+        }
+    }
+
+    // MARK: Response Handling
+
+    private func handleResponse<T: Decodable>(_ result: Result<Response, MoyaError>, completion: @escaping (Result<T, Error>) -> Void) {
+        switch result {
+        case .success(let response):
+            // Log non-200 status codes
+            if response.statusCode != 200 {
+                let errorDescription = "Received non-200 status code: \(response.statusCode), Response: \(String(describing: response))"
+                print(errorDescription)
             }
+
+            // Handle rate limiting (HTTP 429)
+            if response.statusCode == 429,
+               let retryAfterHeader = response.response?.allHeaderFields["retry-after"] as? String,
+               let retryAfter = Int(retryAfterHeader) {
+                let rateLimitErrorDescription = "Rate limit exceeded. Please wait for \(retryAfter) seconds."
+                print(rateLimitErrorDescription)
+                completion(.failure(NSError(domain: "CloudflareAPI", code: 429, userInfo: [NSLocalizedDescriptionKey: rateLimitErrorDescription])))
+                return
+            }
+
+            // Attempt to decode the response
+            do {
+                let decodedResponse = try JSONDecoder().decode(APIResponse<T>.self, from: response.data)
+                print("Decoded response: \(decodedResponse)") // Debug print for decoded data
+                if decodedResponse.success {
+                    if let result = decodedResponse.result {
+                        completion(.success(result))
+                    } else {
+                        let missingResultErrorDescription = "API response success but no result returned."
+                        print(missingResultErrorDescription)
+                        completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: missingResultErrorDescription])))
+                    }
+                } else {
+                    let apiErrorDescription = "API returned errors: \(decodedResponse.errors)"
+                    print(apiErrorDescription)
+                    completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: apiErrorDescription])))
+                }
+            } catch {
+                let decodingErrorDescription = "Error decoding response: \(error.localizedDescription)"
+                print(decodingErrorDescription)
+                completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: decodingErrorDescription])))
+            }
+
+        case .failure(let error):
+            let networkErrorDescription = "Network error: \(error.localizedDescription)"
+            print(networkErrorDescription)
+            completion(.failure(error))
         }
     }
 }
+
+// MARK: - Supporting Models
+
+struct APIResponse<T: Decodable>: Decodable {
+    let success: Bool
+    let errors: [String]
+    let result: T?
+}
+
+struct RoutingRulesResponse: Codable {
+    let result: [RoutingRule]
+    let success: Bool
+    let errors: [String]
+    let messages: [String]
+    let result_info: ResultInfo
+}
+
+struct ResultInfo: Codable {
+    let page: Int
+    let per_page: Int
+    let count: Int
+    let total_count: Int
+}
+
+/// A placeholder for API responses with no meaningful `result` data.
+struct EmptyResponse: Decodable {}

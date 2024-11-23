@@ -9,11 +9,30 @@ import SwiftUI
 
 @main
 struct InstantCustomEmailApp: App {
-    @StateObject private var emailRoutesViewModel = EmailRoutesViewModel()
+    @StateObject private var routingRulesViewModel = RoutingRulesViewModel()
+    @StateObject private var destinationAddressesViewModel = DestinationAddressesViewModel()
 
     var body: some Scene {
         WindowGroup {
-            EmailRoutesView(viewModel: emailRoutesViewModel)
+            ContentView()
+                .environmentObject(routingRulesViewModel)
+                .environmentObject(destinationAddressesViewModel)
+        }
+    }
+}
+
+struct ContentView: View {
+    var body: some View {
+        TabView {
+            DestinationAddressesView()
+                .tabItem {
+                    Label("Destination Addresses", systemImage: "envelope")
+                }
+
+            RoutingRulesView()
+                .tabItem {
+                    Label("Routing Rules", systemImage: "list.dash")
+                }
         }
     }
 }
