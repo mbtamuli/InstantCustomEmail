@@ -6,9 +6,9 @@ struct SettingsView: View {
     @State private var verificationMessage: String = ""
     @State private var accountId: String = UserDefaults.standard.string(forKey: Constants.cloudflareAccountIdKey) ?? ""
     @State private var apiToken: String = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") ?? ""
-    @State private var zoneId: String = UserDefaults.standard.string(forKey: "CloudflareZoneIdKey") ?? ""  // Zone ID state
-    @State private var showAlert: Bool = false  // Controls when the alert is shown
-    @State private var alertTitle: String = "" // Title for the alert
+    @State private var zoneId: String = UserDefaults.standard.string(forKey: "CloudflareZoneIdKey") ?? ""
+    @State private var showAlert: Bool = false
+    @State private var alertTitle: String = ""
 
     var body: some View {
         NavigationView {
@@ -35,16 +35,23 @@ struct SettingsView: View {
                 // Verify Token Button Section
                 VStack {
                     Button(action: {
+                        KeychainHelper.shared.save(service: "CloudflareService", account: "apiToken", data: apiToken)
                         cloudflareService.verifyToken { result in
-                            switch result {
-                            case .success(let message):
-                                alertTitle = "Success"
-                                verificationMessage = message
-                                showAlert = true
-                            case .failure(let error):
-                                alertTitle = "Error"
-                                verificationMessage = error.localizedDescription
-                                showAlert = true
+                            DispatchQueue.main.async {
+                                switch result {
+                                case .success(let verifyResponse):
+                                    alertTitle = "Success"
+                                    if let message = verifyResponse.messages.first?.message {
+                                        verificationMessage = message
+                                    } else {
+                                        verificationMessage = "API Token is valid."
+                                    }
+                                    showAlert = true
+                                case .failure(let error):
+                                    alertTitle = "Error"
+                                    verificationMessage = error.localizedDescription
+                                    showAlert = true
+                                }
                             }
                         }
                     }) {
@@ -57,7 +64,7 @@ struct SettingsView: View {
                 // Save settings to UserDefaults and Keychain
                 UserDefaults.standard.set(accountId, forKey: Constants.cloudflareAccountIdKey)
                 KeychainHelper.shared.save(service: "CloudflareService", account: "apiToken", data: apiToken)
-                UserDefaults.standard.set(zoneId, forKey: "CloudflareZoneIdKey")  // Save Zone ID to UserDefaults
+                UserDefaults.standard.set(zoneId, forKey: "CloudflareZoneIdKey")
             })
             .alert(isPresented: $showAlert) {
                 Alert(
@@ -67,11 +74,5 @@ struct SettingsView: View {
                 )
             }
         }
-    }
-}
-
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView()
     }
 }

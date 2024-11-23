@@ -231,9 +231,26 @@ class CloudflareService {
 
     // MARK: Token Verification
 
-    func verifyToken(completion: @escaping (Result<String, Error>) -> Void) {
+    func verifyToken(completion: @escaping (Result<VerifyTokenResponse, Error>) -> Void) {
         provider.request(.verifyToken) { result in
-            self.handleResponse(result, completion: completion)
+            switch result {
+            case .success(let response):
+                do {
+                    let decodedResponse = try JSONDecoder().decode(VerifyTokenResponse.self, from: response.data)
+                    if decodedResponse.success {
+                        completion(.success(decodedResponse))
+                    } else {
+                        let apiErrorDescription = "API returned errors: \(decodedResponse.errors)"
+                        completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: apiErrorDescription])))
+                    }
+                } catch {
+                    let decodingErrorDescription = "Error decoding response: \(error.localizedDescription)"
+                    completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: decodingErrorDescription])))
+                }
+            case .failure(let error):
+                let networkErrorDescription = "Network error: \(error.localizedDescription)"
+                completion(.failure(NSError(domain: "CloudflareAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: networkErrorDescription])))
+            }
         }
     }
 
@@ -294,7 +311,27 @@ class CloudflareService {
 struct APIResponse<T: Decodable>: Decodable {
     let success: Bool
     let errors: [String]
+    let messages: [APIMessage]
     let result: T?
+}
+
+struct VerifyTokenResponse: Decodable {
+    let result: VerifyTokenResult
+    let success: Bool
+    let errors: [String]
+    let messages: [APIMessage]
+}
+
+struct VerifyTokenResult: Decodable {
+    let id: String
+    let status: String
+    let expires_on: String
+}
+
+struct APIMessage: Decodable {
+    let code: Int
+    let message: String
+    let type: String?
 }
 
 struct RoutingRulesResponse: Codable {
