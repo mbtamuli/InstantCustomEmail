@@ -9,10 +9,21 @@ struct AddEmailRouteView: View {
         NavigationView {
             Form {
                 Section(header: Text("Custom Address")) {
-                    TextField("Custom Address", text: $customAddress)
+                    TextField(
+                        "e.g., mctrl@user.com",
+                        text: $customAddress
+                    )
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
                 }
-                Section(header: Text("Destination Address")) {
-                    TextField("Destination Address", text: $destinationAddress)
+
+                Section(header: Text("Destination Email")) {
+                    TextField(
+                        "e.g., user+finance@gmail.com",
+                        text: $destinationAddress
+                    )
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
                 }
             }
             .navigationTitle("Add Email Route")

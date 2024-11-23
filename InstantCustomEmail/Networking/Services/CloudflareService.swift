@@ -1,8 +1,6 @@
 import Foundation
 import Moya
 
-let cloudflareAccountIdKey = "CloudflareAccountId"
-
 enum CloudflareAPI {
     case getEmailRoutes(accountId: String)
     case createEmailRoute(accountId: String, customAddress: String, destinationAddress: String)
@@ -11,35 +9,38 @@ enum CloudflareAPI {
     case getEmailAliases(accountId: String)
     case createEmailAlias(accountId: String, customAddress: String, destinationAddress: String)
     case deleteEmailAlias(accountId: String, destinationAddressIdentifier: String)
+    case verifyToken
 }
 
 extension CloudflareAPI: TargetType {
     var baseURL: URL {
-        return URL(string: "https://api.cloudflare.com/client/v4/accounts")!
+        return URL(string: "https://api.cloudflare.com/client/v4")!
     }
 
     var path: String {
         switch self {
         case .getEmailRoutes(let accountId):
-            return "/\(accountId)/email/routing/addresses"
+            return "/accounts/\(accountId)/email/routing/addresses"
         case .createEmailRoute(let accountId, _, _):
-            return "/\(accountId)/email/routing/addresses"
+            return "/accounts/\(accountId)/email/routing/addresses"
         case .deleteEmailRoute(let accountId, let destinationAddressIdentifier):
-            return "/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
+            return "/accounts/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
         case .getEmailRoute(let accountId, let destinationAddressIdentifier):
-            return "/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
+            return "/accounts/\(accountId)/email/routing/addresses/\(destinationAddressIdentifier)"
         case .getEmailAliases(let accountId):
-            return "/\(accountId)/email/routing/aliases"
+            return "/accounts/\(accountId)/email/routing/aliases"
         case .createEmailAlias(let accountId, _, _):
-            return "/\(accountId)/email/routing/aliases"
+            return "/accounts/\(accountId)/email/routing/aliases"
         case .deleteEmailAlias(let accountId, let destinationAddressIdentifier):
-            return "/\(accountId)/email/routing/aliases/\(destinationAddressIdentifier)"
+            return "/accounts/\(accountId)/email/routing/aliases/\(destinationAddressIdentifier)"
+        case .verifyToken:
+            return "/user/tokens/verify"
         }
     }
 
     var method: Moya.Method {
         switch self {
-        case .getEmailRoutes, .getEmailRoute, .getEmailAliases:
+        case .getEmailRoutes, .getEmailRoute, .getEmailAliases, .verifyToken:
             return .get
         case .createEmailRoute, .createEmailAlias:
             return .post
@@ -50,7 +51,7 @@ extension CloudflareAPI: TargetType {
 
     var task: Task {
         switch self {
-        case .getEmailRoutes, .getEmailRoute, .deleteEmailRoute, .getEmailAliases, .deleteEmailAlias:
+        case .getEmailRoutes, .getEmailRoute, .deleteEmailRoute, .getEmailAliases, .deleteEmailAlias, .verifyToken:
             return .requestPlain
         case .createEmailRoute(_, let customAddress, let destinationAddress):
             let parameters: [String: Any] = [
@@ -69,17 +70,19 @@ extension CloudflareAPI: TargetType {
 
     var headers: [String: String]? {
         var headers = ["Content-Type": "application/json"]
-        if let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") {
-            headers["Authorization"] = "Bearer \(apiToken)"
+        guard let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") else {
+            assertionFailure("API Token not found in Keychain. Requests may fail.")
+            return headers  // Return basic headers without Authorization
         }
+        headers["Authorization"] = "Bearer \(apiToken)"
         return headers
     }
 }
 
 class CloudflareService {
-    private let provider = MoyaProvider<CloudflareAPI>()
+    private let provider = MoyaProvider<CloudflareAPI>(plugins: [NetworkLoggerPlugin(configuration: .init(logOptions: .verbose))])
     private var accountId: String {
-        UserDefaults.standard.string(forKey: cloudflareAccountIdKey) ?? ""
+        UserDefaults.standard.string(forKey: Constants.cloudflareAccountIdKey) ?? ""
     }
 
     func getEmailRoutes(completion: @escaping (Result<[EmailRoute], Error>) -> Void) {
@@ -99,6 +102,7 @@ class CloudflareService {
     }
 
     func createEmailRoute(customAddress: String, destinationAddress: String, completion: @escaping (Result<EmailRoute, Error>) -> Void) {
+        print(accountId, customAddress, destinationAddress)
         provider.request(.createEmailRoute(accountId: accountId, customAddress: customAddress, destinationAddress: destinationAddress)) { result in
             switch result {
             case .success(let response):
@@ -178,6 +182,35 @@ class CloudflareService {
             switch result {
             case .success:
                 completion(.success(()))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func verifyToken(completion: @escaping (Result<String, Error>) -> Void) {
+        // Log the token before making the request
+        if let apiToken = KeychainHelper.shared.read(service: "CloudflareService", account: "apiToken") {
+            print("Retrieved API Token: \(apiToken)")
+        } else {
+            print("API Token not found in Keychain")
+        }
+
+        provider.request(.verifyToken) { result in
+            switch result {
+            case .success(let response):
+                do {
+                    let json = try JSONSerialization.jsonObject(with: response.data, options: []) as? [String: Any]
+                    if let success = json?["success"] as? Bool, success {
+                        completion(.success("This API Token is valid and active"))
+                    } else {
+                        let errors = json?["errors"] as? [[String: Any]]
+                        let errorMessage = errors?.first?["message"] as? String ?? "Unknown error"
+                        completion(.failure(NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
+                    }
+                } catch let error {
+                    completion(.failure(error))
+                }
             case .failure(let error):
                 completion(.failure(error))
             }
