@@ -15,23 +15,29 @@ struct HomeView: View {
     @State private var showAddDestinationView = false
     @State private var showSettingsView = false
     @State private var searchText = ""
+    @State private var showSearchResults = false
 
     var body: some View {
         NavigationView {
-            VStack {
+            VStack(spacing: 0) {
                 // Search Bar
                 SearchBar(text: $searchText)
                     .padding(.horizontal)
+                    .padding(.top)
 
-                // Destination Addresses List
-                Text("My Emails")
+                // Heading
+                Text("Targets")
                     .font(.headline)
                     .padding(.top)
 
+                // Destination Addresses List
                 List {
-                    ForEach(filteredDestinations, id: \.id) { address in
-                        NavigationLink(destination: DestinationDetailView(destination: address.email)) {
-                            Text(address.email)
+                    ForEach(destinationAddressesViewModel.destinationAddresses, id: \.id) { address in
+                        NavigationLink(destination: DestinationDetailView(destinationAddress: address)) {
+                            HStack {
+                                Image(systemName: "target")
+                                Text(address.email)
+                            }
                         }
                     }
                 }
@@ -44,24 +50,24 @@ struct HomeView: View {
                     Button(action: {
                         showAddEmailView = true
                     }) {
-                        Label("Add Email", systemImage: "plus.circle.fill")
+                        Label("Add Email", systemImage: "plus")
                     }
-
                     Spacer()
-
                     Button(action: {
                         showAddDestinationView = true
                     }) {
-                        Text("Add Target")
+                        Label("Add Target", systemImage: "plus")
                     }
                 }
                 .padding(.horizontal)
+                .padding(.bottom)
             }
+            .navigationBarTitle("Home", displayMode: .inline)
             .navigationBarItems(trailing:
                 Button(action: {
                     showSettingsView = true
                 }) {
-                    Image(systemName: "gear")
+                    Image(systemName: "ellipsis.circle")
                 }
             )
             .sheet(isPresented: $showAddEmailView) {
@@ -76,18 +82,15 @@ struct HomeView: View {
             .sheet(isPresented: $showSettingsView) {
                 SettingsView()
             }
+            .sheet(isPresented: $showSearchResults) {
+                SearchResultsView(showSearchResults: $showSearchResults)
+                    .environmentObject(routingRulesViewModel)
+                    .environmentObject(destinationAddressesViewModel)
+            }
             .onAppear {
                 destinationAddressesViewModel.fetchDestinationAddresses()
                 routingRulesViewModel.loadRoutingRules()
             }
-        }
-    }
-
-    var filteredDestinations: [DestinationAddress] {
-        if searchText.isEmpty {
-            return destinationAddressesViewModel.destinationAddresses
-        } else {
-            return destinationAddressesViewModel.destinationAddresses.filter { $0.email.localizedCaseInsensitiveContains(searchText) }
         }
     }
 }

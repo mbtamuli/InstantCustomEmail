@@ -16,7 +16,7 @@ struct AddDestinationView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Destination Email")) {
+                Section(header: Label("Destination Email", systemImage: "target")) {
                     TextField("e.g., user@example.com", text: $email)
                         .autocapitalization(.none)
                         .keyboardType(.emailAddress)

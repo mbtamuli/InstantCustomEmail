@@ -5,6 +5,8 @@
 //  Created by Mriyam Tamuli on 11/24/24.
 //
 
+// AddEmailView.swift
+
 import SwiftUI
 
 struct AddEmailView: View {
@@ -18,28 +20,51 @@ struct AddEmailView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Email")) {
-                    TextField("Enter email", text: $emailValue)
-                        .autocapitalization(.none)
+                Section {
+                    HStack {
+                        Image(systemName: "arrow.uturn.right")
+                        TextField("Email", text: $emailValue)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
                 }
 
-                Section(header: Text("Destination")) {
-                    Picker("Select Destination", selection: $selectedDestination) {
-                        ForEach(destinationAddressesViewModel.destinationAddresses, id: \.self) { address in
-                            Text(address.email).tag(address as DestinationAddress?)
+
+                Section {
+                    NavigationLink(
+                        destination: DestinationSelectionView(selectedDestination: $selectedDestination)
+                            .environmentObject(destinationAddressesViewModel)
+                    ) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Label {
+                                Text("Destination")
+                            } icon: {
+                                Image(systemName: "target")
+                                    .foregroundColor(.primary)
+                            }
+
+                            if let destination = selectedDestination {
+                                Text(destination.email)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("Select a destination")
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        .padding(.vertical, 8) // Adds space above and below the NavigationLink
                     }
                 }
             }
             .navigationBarTitle("Add Email", displayMode: .inline)
-            .navigationBarItems(leading:
-                Button("Cancel") {
+            .navigationBarItems(
+                leading: Button("Cancel") {
                     presentationMode.wrappedValue.dismiss()
-                }, trailing:
-                Button("Save") {
+                },
+                trailing: Button("Save") {
                     saveEmail()
                     presentationMode.wrappedValue.dismiss()
                 }
+                .disabled(emailValue.isEmpty || selectedDestination == nil) // Disable Save if fields are empty
             )
         }
     }

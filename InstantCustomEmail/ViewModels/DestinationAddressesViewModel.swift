@@ -1,3 +1,9 @@
+//
+//  DestinationAddressesViewModel.swift
+//  InstantCustomEmail
+//
+//  Created by Mriyam Tamuli on 11/23/24.
+
 import SwiftUI
 
 class DestinationAddressesViewModel: ObservableObject {
@@ -24,14 +30,15 @@ class DestinationAddressesViewModel: ObservableObject {
 
         cloudflareService.listDestinationAddresses { [weak self] result in
             DispatchQueue.main.async {
-                self?.isFetching = false
-                self?.isLoading = false
+                guard let self = self else { return }
+                self.isFetching = false
+                self.isLoading = false
                 switch result {
                 case .success(let addresses):
-                    self?.destinationAddresses = addresses
-                    self?.lastFetchTime = Date()
+                    self.destinationAddresses = addresses
+                    self.lastFetchTime = Date()
                 case .failure(let error):
-                    self?.errorMessage = "Failed to fetch destination addresses: \(error.localizedDescription)"
+                    self.errorMessage = "Failed to fetch destination addresses: \(error.localizedDescription)"
                 }
             }
         }
@@ -45,13 +52,14 @@ class DestinationAddressesViewModel: ObservableObject {
         isLoading = true
         cloudflareService.createDestinationAddress(email: email) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false
+                guard let self = self else { return }
+                self.isLoading = false
                 switch result {
                 case .success(let address):
-                    self?.destinationAddresses.append(address)
-                    self?.lastFetchTime = Date()
+                    self.destinationAddresses.append(address)
+                    self.lastFetchTime = Date()
                 case .failure(let error):
-                    self?.errorMessage = "Failed to add destination address: \(error.localizedDescription)"
+                    self.errorMessage = "Failed to add destination address: \(error.localizedDescription)"
                 }
             }
         }
@@ -65,13 +73,14 @@ class DestinationAddressesViewModel: ObservableObject {
         isLoading = true
         cloudflareService.deleteDestinationAddress(identifier: identifier) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false
+                guard let self = self else { return }
+                self.isLoading = false
                 switch result {
                 case .success:
-                    self?.destinationAddresses.removeAll { $0.id == identifier }
-                    self?.lastFetchTime = Date()
+                    self.destinationAddresses.removeAll { $0.id == identifier }
+                    self.lastFetchTime = Date()
                 case .failure(let error):
-                    self?.errorMessage = "Failed to delete destination address: \(error.localizedDescription)"
+                    self.errorMessage = "Failed to delete destination address: \(error.localizedDescription)"
                 }
             }
         }

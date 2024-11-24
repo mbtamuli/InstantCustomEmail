@@ -47,7 +47,8 @@ struct SearchBar: UIViewRepresentable {
         let searchBar = UISearchBar(frame: .zero)
         searchBar.delegate = context.coordinator
         searchBar.placeholder = "Search emails"
-        searchBar.searchBarStyle = .minimal   // Makes the search bar blend into the view
+        searchBar.backgroundImage = UIImage()
+        searchBar.searchBarStyle = .minimal
         return searchBar
     }
 
