@@ -19,9 +19,10 @@ class RoutingRulesViewModel: ObservableObject {
     @Published var showAlert: Bool = false
     @Published var groupedRoutingRules: [String: [RoutingRule]] = [:]
 
-    var hasLoaded: Bool = false  // Changed access level to make it accessible
+    var hasLoaded: Bool = false
 
     private var isFetching: Bool = false
+    private let cloudflareService = CloudflareService()
 
     func loadRoutingRules() {
         guard !isFetching else {
@@ -40,7 +41,7 @@ class RoutingRulesViewModel: ObservableObject {
 
         print("Fetching routing rules...")
 
-        CloudflareService().listRoutingRules { [weak self] result in
+        cloudflareService.listRoutingRules { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.isFetching = false
@@ -54,6 +55,25 @@ class RoutingRulesViewModel: ObservableObject {
                     self.errorMessage = error.localizedDescription
                     self.showAlert = true
                     print("Error fetching routing rules: \(error)")
+                }
+            }
+        }
+    }
+
+    func createRoutingRule(rule: RoutingRule) {
+        isLoading = true
+        cloudflareService.createRoutingRule(rule: rule) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isLoading = false
+                switch result {
+                case .success(let newRule):
+                    self.routingRules.append(newRule)
+                    print("Created routing rule successfully")
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.showAlert = true
+                    print("Error creating routing rule: \(error)")
                 }
             }
         }

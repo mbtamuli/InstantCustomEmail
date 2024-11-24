@@ -14,25 +14,9 @@ struct InstantCustomEmailApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            HomeView()
                 .environmentObject(routingRulesViewModel)
                 .environmentObject(destinationAddressesViewModel)
-        }
-    }
-}
-
-struct ContentView: View {
-    var body: some View {
-        TabView {
-            DestinationAddressesView()
-                .tabItem {
-                    Label("Destination Addresses", systemImage: "envelope")
-                }
-
-            RoutingRulesView()
-                .tabItem {
-                    Label("Routing Rules", systemImage: "list.dash")
-                }
         }
     }
 }

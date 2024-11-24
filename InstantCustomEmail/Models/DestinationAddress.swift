@@ -4,9 +4,10 @@
 //
 //  Created by Mriyam Tamuli on 11/23/24.
 //
+
 import Foundation
 
-struct DestinationAddress: Identifiable, Codable {
+struct DestinationAddress: Identifiable, Codable, Hashable {
     let id: String  // Unique identifier for the destination address
     let email: String  // Destination email address
     let created: String  // Creation timestamp

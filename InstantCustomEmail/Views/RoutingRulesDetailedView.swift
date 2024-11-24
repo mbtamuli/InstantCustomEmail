@@ -12,20 +12,37 @@ struct RoutingRulesDetailView: View {
     let rules: [RoutingRule]
 
     var body: some View {
-        List(rules) { rule in
-            VStack(alignment: .leading) {
-                ForEach(rule.matchers, id: \.value) { matcher in
-                    if matcher.field == "to" {
-                        Text(matcher.value ?? "Unknown")
-                            .font(.headline)
+        List {
+            // Display the full destination address at the top
+            Section(header: Text("Destination").font(.headline)) {
+                Text(destination)
+                    .font(.body)
+                    .lineLimit(nil) // Allow the text to wrap and display fully
+                    .multilineTextAlignment(.leading)
+            }
+
+            // Display the routing rules
+            Section(header: Text("Routing Rules").font(.headline)) {
+                ForEach(rules) { rule in
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(rule.matchers, id: \.value) { matcher in
+                            if matcher.field == "to" {
+                                Text(matcher.value ?? "Unknown")
+                                    .font(.headline)
+                                    .lineLimit(nil)
+                            }
+                        }
+                        if let ruleName = rule.name, !ruleName.isEmpty {
+                            Text(ruleName)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                }
-                if let ruleName = rule.name, !ruleName.isEmpty {
-                    Text(ruleName)
-                        .font(.subheadline)
+                    .padding(.vertical, 5)
                 }
             }
         }
-        .navigationTitle(destination)
+        .navigationTitle("Routing Rules")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
