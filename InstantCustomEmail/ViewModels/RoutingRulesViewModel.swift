@@ -79,6 +79,25 @@ class RoutingRulesViewModel: ObservableObject {
         }
     }
 
+    func deleteRoutingRule(ruleId: String) {
+        isLoading = true
+        cloudflareService.deleteRoutingRule(ruleId: ruleId) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isLoading = false
+                switch result {
+                case .success:
+                    self.routingRules.removeAll { $0.id == ruleId }
+                    print("Deleted routing rule successfully")
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.showAlert = true
+                    print("Error deleting routing rule: \(error)")
+                }
+            }
+        }
+    }
+
     private func groupRoutingRulesByDestination() {
         let grouped = Dictionary(grouping: routingRules) { (rule) -> String in
             if let destination = rule.actions.first?.value?.first {

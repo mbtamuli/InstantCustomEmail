@@ -27,19 +27,26 @@ struct HomeView: View {
 
                 // Heading
                 Text("Targets")
-                    .font(.headline)
+                    .font(.title)
                     .padding(.top)
 
                 // Destination Addresses List
                 List {
                     ForEach(destinationAddressesViewModel.destinationAddresses, id: \.id) { address in
-                        NavigationLink(destination: DestinationDetailView(destinationAddress: address)) {
-                            HStack {
-                                Image(systemName: "target")
-                                Text(address.email)
+                        DestinationListItemView(
+                            address: address,
+                            routingRulesCount: routingRulesCount(for: address)
+                        )
+                        .background(
+                            NavigationLink(
+                                destination: DestinationDetailView(destinationAddress: address)
+                            ) {
+                                EmptyView()
                             }
-                        }
+                            .opacity(0)
+                        )
                     }
+                    .onDelete(perform: deleteDestination)
                 }
                 .listStyle(PlainListStyle())
 
@@ -92,5 +99,20 @@ struct HomeView: View {
                 routingRulesViewModel.loadRoutingRules()
             }
         }
+    }
+
+    func deleteDestination(at offsets: IndexSet) {
+        for index in offsets {
+            let address = destinationAddressesViewModel.destinationAddresses[index]
+            destinationAddressesViewModel.deleteDestinationAddress(identifier: address.id)
+        }
+    }
+
+    func routingRulesCount(for address: DestinationAddress) -> Int {
+        routingRulesViewModel.routingRules.filter { rule in
+            rule.actions.contains { action in
+                action.value?.contains(address.email) == true
+            }
+        }.count
     }
 }

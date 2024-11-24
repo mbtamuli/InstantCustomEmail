@@ -3,30 +3,37 @@
 //  InstantCustomEmail
 //
 //  Created by Mriyam Tamuli on 11/23/24.
+//
 
 import SwiftUI
 
 class DestinationAddressesViewModel: ObservableObject {
     @Published var destinationAddresses: [DestinationAddress] = []
-    @Published var showAddDestinationAddressView: Bool = false
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var showAlert: Bool = false
 
-    private let cloudflareService = CloudflareService()
+    var hasLoaded: Bool = false
+
     private var isFetching: Bool = false
-    private var lastFetchTime: Date?
-    private let fetchTimeout: TimeInterval = 300 // Configurable timeout in seconds (e.g., 5 minutes)
+    private let cloudflareService = CloudflareService()
 
     func fetchDestinationAddresses() {
-        guard !isFetching else { return }
+        guard !isFetching else {
+            print("Skipping fetch: already fetching")
+            return
+        }
 
-        if let lastFetch = lastFetchTime, Date().timeIntervalSince(lastFetch) < fetchTimeout {
+        if hasLoaded {
+            print("Skipping fetch: already loaded")
             return
         }
 
         isFetching = true
         isLoading = true
         errorMessage = nil
+
+        print("Fetching destination addresses...")
 
         cloudflareService.listDestinationAddresses { [weak self] result in
             DispatchQueue.main.async {
@@ -36,9 +43,12 @@ class DestinationAddressesViewModel: ObservableObject {
                 switch result {
                 case .success(let addresses):
                     self.destinationAddresses = addresses
-                    self.lastFetchTime = Date()
+                    self.hasLoaded = true
+                    print("Fetched destination addresses successfully")
                 case .failure(let error):
-                    self.errorMessage = "Failed to fetch destination addresses: \(error.localizedDescription)"
+                    self.errorMessage = error.localizedDescription
+                    self.showAlert = true
+                    print("Error fetching destination addresses: \(error)")
                 }
             }
         }
@@ -57,9 +67,11 @@ class DestinationAddressesViewModel: ObservableObject {
                 switch result {
                 case .success(let address):
                     self.destinationAddresses.append(address)
-                    self.lastFetchTime = Date()
+                    print("Added destination address successfully")
                 case .failure(let error):
-                    self.errorMessage = "Failed to add destination address: \(error.localizedDescription)"
+                    self.errorMessage = error.localizedDescription
+                    self.showAlert = true
+                    print("Error adding destination address: \(error)")
                 }
             }
         }
@@ -78,15 +90,13 @@ class DestinationAddressesViewModel: ObservableObject {
                 switch result {
                 case .success:
                     self.destinationAddresses.removeAll { $0.id == identifier }
-                    self.lastFetchTime = Date()
+                    print("Deleted destination address successfully")
                 case .failure(let error):
-                    self.errorMessage = "Failed to delete destination address: \(error.localizedDescription)"
+                    self.errorMessage = error.localizedDescription
+                    self.showAlert = true
+                    print("Error deleting destination address: \(error)")
                 }
             }
         }
-    }
-
-    func dismissError() {
-        errorMessage = nil
     }
 }

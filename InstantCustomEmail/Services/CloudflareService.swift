@@ -100,24 +100,23 @@ extension CloudflareAPI: TargetType {
 class CloudflareService {
     private let provider = MoyaProvider<CloudflareAPI>(plugins: [NetworkLoggerPlugin(configuration: .init(logOptions: .verbose))])
 
-    private var accountId: String {
-        guard let accountId = UserDefaults.standard.string(forKey: Constants.cloudflareAccountIdKey), !accountId.isEmpty else {
-            fatalError("Account ID is not set")
-        }
-        return accountId
+    private var accountId: String? {
+        return UserDefaults.standard
+            .string(forKey: Constants.cloudflareAccountIdKey)
     }
 
-    private var zoneId: String {
-        guard let zoneId = UserDefaults.standard.string(forKey: "CloudflareZoneIdKey"), !zoneId.isEmpty else {
-            // You could show an alert or navigate to settings
-            fatalError("Zone ID is not set")  // Or handle the case more gracefully
-        }
-        return zoneId
+    private var zoneId: String? {
+        return UserDefaults.standard
+            .string(forKey: Constants.cloudflareZoneIdKey)
     }
 
     // MARK: Email Routes
 
     func listDestinationAddresses(completion: @escaping (Result<[DestinationAddress], Error>) -> Void) {
+        guard let accountId = accountId, !accountId.isEmpty else {
+            completion(.failure(CloudflareServiceError.accountIdNotSet))
+            return
+        }
         print("Account ID: \(accountId)")  // For debugging purposes
         provider.request(.listDestinationAddresses(accountId: accountId)) { result in
             self.handleResponse(result, completion: completion)
@@ -125,12 +124,20 @@ class CloudflareService {
     }
 
     func createDestinationAddress(email: String, completion: @escaping (Result<DestinationAddress, Error>) -> Void) {
+        guard let accountId = accountId, !accountId.isEmpty else {
+            completion(.failure(CloudflareServiceError.accountIdNotSet))
+            return
+        }
         provider.request(.createDestinationAddress(accountId: accountId, email: email)) { result in
             self.handleResponse(result, completion: completion)
         }
     }
 
     func deleteDestinationAddress(identifier: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let accountId = accountId, !accountId.isEmpty else {
+            completion(.failure(CloudflareServiceError.accountIdNotSet))
+            return
+        }
         provider.request(.deleteDestinationAddress(accountId: accountId, destinationAddressIdentifier: identifier)) { result in
             switch result {
             case .success(let response):
@@ -153,6 +160,10 @@ class CloudflareService {
     }
 
     func getDestinationAddress(identifier: String, completion: @escaping (Result<DestinationAddress, Error>) -> Void) {
+        guard let accountId = accountId, !accountId.isEmpty else {
+            completion(.failure(CloudflareServiceError.accountIdNotSet))
+            return
+        }
         provider.request(.getDestinationAddress(accountId: accountId, destinationAddressIdentifier: identifier)) { result in
             self.handleResponse(result, completion: completion)
         }
@@ -161,6 +172,10 @@ class CloudflareService {
     // MARK: Routing Rules
 
     func listRoutingRules(completion: @escaping (Result<[RoutingRule], Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.listRoutingRules(zoneId: zoneId)) { result in
             switch result {
             case .success(let response):
@@ -183,12 +198,20 @@ class CloudflareService {
 
 
     func createRoutingRule(rule: RoutingRule, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.createRoutingRule(zoneId: zoneId, rule: rule)) { result in
             self.handleResponse(result, completion: completion)
         }
     }
 
     func deleteRoutingRule(ruleId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.deleteRoutingRule(zoneId: zoneId, ruleId: ruleId)) { result in
             switch result {
             case .success(let response):
@@ -211,18 +234,30 @@ class CloudflareService {
     }
 
     func getRoutingRule(ruleId: String, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.getRoutingRule(zoneId: zoneId, ruleId: ruleId)) { result in
             self.handleResponse(result, completion: completion)
         }
     }
 
     func getCatchAllRule(completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.getCatchAllRule(zoneId: zoneId)) { result in
             self.handleResponse(result, completion: completion)
         }
     }
 
     func updateCatchAllRule(rule: RoutingRule, completion: @escaping (Result<RoutingRule, Error>) -> Void) {
+        guard let zoneId = zoneId, !zoneId.isEmpty else {
+            completion(.failure(CloudflareServiceError.zoneIdNotSet))
+            return
+        }
         provider.request(.updateCatchAllRule(zoneId: zoneId, rule: rule)) { result in
             self.handleResponse(result, completion: completion)
         }
@@ -351,3 +386,19 @@ struct ResultInfo: Codable {
 
 /// A placeholder for API responses with no meaningful `result` data.
 struct EmptyResponse: Decodable {}
+
+// MARK: - CloudflareServiceError
+
+enum CloudflareServiceError: Error, LocalizedError {
+    case accountIdNotSet
+    case zoneIdNotSet
+
+    var errorDescription: String? {
+        switch self {
+        case .accountIdNotSet:
+            return "Account ID is not set"
+        case .zoneIdNotSet:
+            return "Zone ID is not set"
+        }
+    }
+}

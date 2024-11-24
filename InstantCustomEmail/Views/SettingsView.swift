@@ -64,7 +64,7 @@ struct SettingsView: View {
                 // Save settings to UserDefaults and Keychain
                 UserDefaults.standard.set(accountId, forKey: Constants.cloudflareAccountIdKey)
                 KeychainHelper.shared.save(service: "CloudflareService", account: "apiToken", data: apiToken)
-                UserDefaults.standard.set(zoneId, forKey: "CloudflareZoneIdKey")
+                UserDefaults.standard.set(zoneId, forKey: Constants.cloudflareZoneIdKey)
             })
             .alert(isPresented: $showAlert) {
                 Alert(

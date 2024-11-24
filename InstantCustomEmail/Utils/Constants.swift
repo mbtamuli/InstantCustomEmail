@@ -7,6 +7,7 @@
 import Foundation
 
 struct Constants {
-    static let cloudflareAccountIdKey = "CloudflareAccountId" // Key for storing the Cloudflare Account ID
-    static let cloudflareApiTokenKey = "CloudflareApiToken"   // Key for storing the API token
+    static let cloudflareAccountIdKey = "CloudflareAccountIdKey"
+    static let cloudflareApiTokenKey = "CloudflareApiToken"
+    static let cloudflareZoneIdKey = "CloudflareZoneIdKey"
 }
